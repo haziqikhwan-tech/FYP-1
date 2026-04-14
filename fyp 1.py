@@ -5,17 +5,16 @@ import os
 import time
 from datetime import date, datetime, timedelta
 
-# Konfigurasi Page
-st.set_page_config(page_title="Sistem Pinjaman Alat Ukur PUO", layout="centered")
+# 1. KONFIGURASI PAGE
+st.set_page_config(page_title="Sistem Pinjaman Alat Ukur PUO", layout="centered", page_icon="🏗️")
 
 DB_FILE = "sistem_pinjaman.db"
-LIMIT_JAM = 3 
+LIMIT_JAM = 3 # Had masa 3 jam
 
-# --- FUNGSI DATABASE (SQLITE) ---
+# 2. FUNGSI DATABASE (SQLITE)
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # Cipta table kalau belum ada
     c.execute('''CREATE TABLE IF NOT EXISTS alatan (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     alat TEXT UNIQUE,
@@ -26,7 +25,7 @@ def init_db():
                     masa_tamat TEXT
                 )''')
     
-    # Masukkan senarai alat master kalau table masih kosong
+    # Cek kalau table kosong, masukkan senarai alat
     c.execute("SELECT COUNT(*) FROM alatan")
     if c.fetchone()[0] == 0:
         alatan_master = [
@@ -56,76 +55,110 @@ def proses_update_db(alat_list, status, peminjam="-", kelas="-", tarikh="-", mas
     conn.commit()
     conn.close()
 
-# --- UI SISTEM ---
+# 3. INITIALIZE & LOAD DATA
 init_db()
 df = get_data_from_db()
 
-st.title("🏗️ Sistem Pinjaman PUO (.db Mode)")
-st.markdown("---")
+# 4. UI SISTEM
+st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
+st.info("Peringatan: Had pinjaman adalah 3 jam bagi setiap alat.")
 
-menu = st.sidebar.selectbox("MENU NAVIGASI", ["UTAMA", "BORANG PINJAMAN", "STATUS & TIMER"])
+# Sidebar Menu
+st.sidebar.header("NAVIGASI")
+menu = st.sidebar.selectbox("Pilih Menu", ["🏠 UTAMA", "📝 BORANG PINJAMAN", "⏳ STATUS & TIMER"])
 
-if menu == "UTAMA":
-    st.subheader("Selamat Datang!")
+if menu == "🏠 UTAMA":
+    st.subheader("Selamat Datang ke Sistem Digital Geomatik")
     tersedia = len(df[df['status'] == 'Tersedia'])
-    st.metric(label="Alat Tersedia", value=f"{tersedia} Alat")
+    dipinjam = len(df[df['status'] == 'Dipinjam'])
+    
+    col_stat1, col_stat2 = st.columns(2)
+    col_stat1.metric("Alat Tersedia", f"{tersedia}")
+    col_stat2.metric("Sedang Dipinjam", f"{dipinjam}")
+    
+    st.markdown("""
+    **Panduan Pengguna:**
+    1. Pergi ke **Borang Pinjaman** untuk mengambil alat.
+    2. Satu pendaftaran boleh merangkumi banyak alat (Multi-select).
+    3. Semak baki masa di menu **Status & Timer**.
+    """)
 
-elif menu == "BORANG PINJAMAN":
-    st.subheader("📝 Borang Pinjaman Multi-Alat")
+elif menu == "📝 BORANG PINJAMAN":
+    st.subheader("Daftar Pinjaman Baru")
     senarai_tersedia = df[df['status'] == 'Tersedia']['alat'].tolist()
     
     if senarai_tersedia:
-        with st.form("borang_pinjam"):
-            nama = st.text_input("Nama Penuh").upper()
+        with st.form("form_pinjam", clear_on_submit=True):
+            nama = st.text_input("Nama Penuh Peminjam").upper()
             matrik = st.text_input("No. Matrik")
-            kelas = st.text_input("Kelas").upper()
-            pilihan_alat = st.multiselect("Pilih Alat", senarai_tersedia)
-            submit = st.form_submit_button("SAHKAN PINJAMAN")
+            kelas = st.text_input("Kelas (e.g. DGU5A)").upper()
+            pilihan_alat = st.multiselect("Pilih Alat-alat yang ingin dipinjam", senarai_tersedia)
             
-            if submit:
+            if st.form_submit_button("SAHKAN PINJAMAN"):
                 if nama and matrik and kelas and pilihan_alat:
                     waktu_tamat = datetime.now() + timedelta(hours=LIMIT_JAM)
                     t_str = waktu_tamat.strftime("%Y-%m-%d %H:%M:%S")
                     d_str = date.today().strftime("%d/%m/%Y")
                     
                     proses_update_db(pilihan_alat, "Dipinjam", nama, kelas, d_str, t_str)
-                    st.success("Pinjaman Berjaya!")
+                    st.success(f"Berjaya! {len(pilihan_alat)} alat telah direkodkan.")
+                    st.balloons()
+                    time.sleep(1)
                     st.rerun()
+                else:
+                    st.error("Sila isi semua maklumat!")
     else:
-        st.error("Tiada alat tersedia.")
+        st.error("Maaf, semua peralatan sedang dipinjam.")
 
-elif menu == "STATUS & TIMER":
-    st.subheader("⏳ Status & Baki Masa")
+elif menu == "⏳ STATUS & TIMER":
+    st.subheader("Pemantauan Baki Masa")
     waktu_sekarang = datetime.now()
     dipinjam_df = df[df['status'] == "Dipinjam"]
     
     if dipinjam_df.empty:
-        st.write("Tiada alat yang sedang dipinjam.")
+        st.write("Tiada alat yang sedang dipinjam buat masa ini.")
     else:
         for index, row in dipinjam_df.iterrows():
-            col1, col2, col3 = st.columns([2, 3, 2])
-            with col1:
-                st.write(f"**{row['alat']}**")
-                st.caption(f"Peminjam: {row['peminjam']}")
-            with col2:
-                t_tamat = datetime.strptime(row['masa_tamat'], "%Y-%m-%d %H:%M:%S")
-                baki_masa = t_tamat - waktu_sekarang
-                if baki_masa.total_seconds() > 0:
-                    m, s = divmod(int(baki_masa.total_seconds()), 60)
-                    h, m = divmod(m, 60)
-                    st.warning(f"{h:d}j {m:02d}m {s:02d}s")
-                else:
-                    proses_update_db([row['alat']], "Tersedia")
-                    st.rerun()
-            with col3:
-                if st.button("RETURN", key=f"btn_{row['alat']}"):
-                    proses_update_db([row['alat']], "Tersedia")
-                    st.rerun()
-            st.divider()
+            with st.container():
+                col1, col2, col3 = st.columns([2, 3, 2])
+                with col1:
+                    st.write(f"**{row['alat']}**")
+                    st.caption(f"👤 {row['peminjam']} ({row['kelas']})")
+                
+                with col2:
+                    t_tamat = datetime.strptime(row['masa_tamat'], "%Y-%m-%d %H:%M:%S")
+                    baki_masa = t_tamat - waktu_sekarang
+                    
+                    if baki_masa.total_seconds() > 0:
+                        m, s = divmod(int(baki_masa.total_seconds()), 60)
+                        h, m = divmod(m, 60)
+                        st.warning(f"⏱️ {h:d}j {m:02d}m {s:02d}s")
+                    else:
+                        proses_update_db([row['alat']], "Tersedia")
+                        st.rerun()
+                
+                with col3:
+                    # Guna on_click untuk tindakan pantas
+                    st.button("PULANG", key=f"btn_{row['alat']}", 
+                              on_click=proses_update_db, args=([row['alat']], "Tersedia"))
+                st.divider()
 
-    # Tengok data mentah database .db
-    if st.checkbox("Tunjuk Data Penuh Database"):
-        st.dataframe(df)
-
-    time.sleep(2)
+    # Refresh page setiap 5 saat untuk update timer (CPU-friendly)
+    time.sleep(5)
     st.rerun()
+
+# 5. DOWNLOAD DATABASE (SIDEBAR)
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("Admin Backup")
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "rb") as f:
+            st.download_button(
+                label="📥 Download .db File",
+                data=f,
+                file_name="sistem_pinjaman_puo.db",
+                mime="application/octet-stream"
+            )
+    
+    if st.checkbox("Tunjuk Data Mentah"):
+        st.write(df)
