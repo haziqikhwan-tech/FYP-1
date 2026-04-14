@@ -6,10 +6,10 @@ import time
 from datetime import date, datetime, timedelta
 
 # 1. KONFIGURASI PAGE
-st.set_page_config(page_title="Sistem Pinjaman Alat Ukur PUO", layout="centered", page_icon="🏗️")
+st.set_page_config(page_title="Sistem Pinjaman Alat Ukur PUO", layout="wide", page_icon="🏗️")
 
 DB_FILE = "sistem_pinjaman.db"
-LIMIT_JAM = 3 # Had masa 3 jam
+LIMIT_JAM = 3 
 
 # 2. FUNGSI DATABASE (SQLITE)
 def init_db():
@@ -25,7 +25,6 @@ def init_db():
                     masa_tamat TEXT
                 )''')
     
-    # Cek kalau table kosong, masukkan senarai alat
     c.execute("SELECT COUNT(*) FROM alatan")
     if c.fetchone()[0] == 0:
         alatan_master = [
@@ -59,16 +58,27 @@ def proses_update_db(alat_list, status, peminjam="-", kelas="-", tarikh="-", mas
 init_db()
 df = get_data_from_db()
 
-# 4. UI SISTEM
-st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
-st.info("Peringatan: Had pinjaman adalah 3 jam bagi setiap alat.")
+# 4. SIDEBAR NAVIGATION & ADMIN TOOLS
+st.sidebar.header("MENU NAVIGASI")
+menu = st.sidebar.selectbox("Pilih Halaman", ["🏠 UTAMA", "📝 BORANG PINJAMAN", "⏳ STATUS & TIMER"])
 
-# Sidebar Menu
-st.sidebar.header("NAVIGASI")
-menu = st.sidebar.selectbox("Pilih Menu", ["🏠 UTAMA", "📝 BORANG PINJAMAN", "⏳ STATUS & TIMER"])
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Admin Backup")
+if os.path.exists(DB_FILE):
+    with open(DB_FILE, "rb") as f:
+        st.sidebar.download_button(
+            label="📥 Download Database (.db)",
+            data=f,
+            file_name="sistem_pinjaman_puo.db",
+            mime="application/octet-stream"
+        )
 
+# 5. UI HALAMAN UTAMA
 if menu == "🏠 UTAMA":
+    st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
     st.subheader("Selamat Datang ke Sistem Digital Geomatik")
+    
+    # Statistik Ringkas
     tersedia = len(df[df['status'] == 'Tersedia'])
     dipinjam = len(df[df['status'] == 'Dipinjam'])
     
@@ -76,15 +86,21 @@ if menu == "🏠 UTAMA":
     col_stat1.metric("Alat Tersedia", f"{tersedia}")
     col_stat2.metric("Sedang Dipinjam", f"{dipinjam}")
     
-    st.markdown("""
-    **Panduan Pengguna:**
-    1. Pergi ke **Borang Pinjaman** untuk mengambil alat.
-    2. Satu pendaftaran boleh merangkumi banyak alat (Multi-select).
-    3. Semak baki masa di menu **Status & Timer**.
-    """)
+    st.info("Nota: Had pinjaman maksimum adalah 3 jam. Alat akan dipulangkan secara automatik selepas tamat tempoh.")
 
+    # --- TABLE DATABASE DI HALAMAN UTAMA ---
+    st.markdown("---")
+    st.subheader("📁 Senarai Inventori & Status Semasa")
+    
+    # Checkbox untuk kawal paparan table
+    tunjuk_table = st.checkbox("Tunjuk Jadual Penuh Alatan", value=True)
+    if tunjuk_table:
+        # Style kan sikit table tu bagi nampak kemas
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+# 6. UI BORANG PINJAMAN
 elif menu == "📝 BORANG PINJAMAN":
-    st.subheader("Daftar Pinjaman Baru")
+    st.title("📝 Borang Pinjaman Multi-Alat")
     senarai_tersedia = df[df['status'] == 'Tersedia']['alat'].tolist()
     
     if senarai_tersedia:
@@ -110,8 +126,9 @@ elif menu == "📝 BORANG PINJAMAN":
     else:
         st.error("Maaf, semua peralatan sedang dipinjam.")
 
+# 7. UI STATUS & TIMER
 elif menu == "⏳ STATUS & TIMER":
-    st.subheader("Pemantauan Baki Masa")
+    st.title("⏳ Pemantauan Baki Masa")
     waktu_sekarang = datetime.now()
     dipinjam_df = df[df['status'] == "Dipinjam"]
     
@@ -138,27 +155,10 @@ elif menu == "⏳ STATUS & TIMER":
                         st.rerun()
                 
                 with col3:
-                    # Guna on_click untuk tindakan pantas
                     st.button("PULANG", key=f"btn_{row['alat']}", 
                               on_click=proses_update_db, args=([row['alat']], "Tersedia"))
                 st.divider()
 
-    # Refresh page setiap 5 saat untuk update timer (CPU-friendly)
+    # Refresh timer setiap 5 saat
     time.sleep(5)
     st.rerun()
-
-# 5. DOWNLOAD DATABASE (SIDEBAR)
-with st.sidebar:
-    st.markdown("---")
-    st.subheader("Admin Backup")
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "rb") as f:
-            st.download_button(
-                label="📥 Download .db File",
-                data=f,
-                file_name="sistem_pinjaman_puo.db",
-                mime="application/octet-stream"
-            )
-    
-    if st.checkbox("Tunjuk Data Mentah"):
-        st.write(df)
