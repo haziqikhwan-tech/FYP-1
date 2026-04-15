@@ -65,7 +65,7 @@ df = get_data_from_db()
 st.sidebar.header("MENU NAVIGASI")
 menu = st.sidebar.selectbox("Pilih Halaman", ["🏠 UTAMA", "📝 BORANG PINJAMAN STUDENT", "⏳ STATUS & TIMER", "🔐 AKSES STAF"])
 
-# 4. HALAMAN UTAMA (STUDENT VIEW)
+# 4. HALAMAN UTAMA (TAMBAH DATABASE VIEW)
 if menu == "🏠 UTAMA":
     st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
     st.subheader("Selamat Datang ke Sistem Digital Geomatik")
@@ -77,9 +77,14 @@ if menu == "🏠 UTAMA":
     col_stat1.metric("Alat Tersedia Untuk Dipinjam", f"{tersedia}")
     col_stat2.metric("Sedang Digunakan", f"{dipinjam}")
     
+    st.markdown("---")
+    # --- JADUAL DATABASE DI HALAMAN UTAMA ---
+    st.subheader("📁 Jadual Status Inventori Semasa")
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    
     st.info("Sila ke menu 'Borang Pinjaman' untuk melakukan urusan pinjaman alat.")
 
-# 5. BORANG PINJAMAN (HANYA UNTUK STUDENT)
+# 5. BORANG PINJAMAN STUDENT
 elif menu == "📝 BORANG PINJAMAN STUDENT":
     st.title("📝 Borang Pinjaman Student")
     senarai_tersedia = df[df['status'] == 'Tersedia']['alat'].tolist()
@@ -137,32 +142,27 @@ elif menu == "⏳ STATUS & TIMER":
     time.sleep(5)
     st.rerun()
 
-# 7. AKSES STAF (LOGIN UNTUK TENGOK DATABASE & DOWNLOAD)
+# 7. AKSES STAF (LOGIN UNTUK DOWNLOAD SAHAJA)
 elif menu == "🔐 AKSES STAF":
     st.title("🔐 Panel Kawalan Staf")
     
-    # Login Section
-    with st.container():
-        user_in = st.text_input("Username Admin")
-        pass_in = st.text_input("Password Admin", type="password")
+    user_in = st.text_input("Username Admin")
+    pass_in = st.text_input("Password Admin", type="password")
+    
+    if user_in == STAFF_USER and pass_in == STAFF_PASS:
+        st.success("Akses Diterima.")
+        st.markdown("---")
         
-        if user_in == STAFF_USER and pass_in == STAFF_PASS:
-            st.success("Akses Diterima. Selamat Kembali Admin!")
-            st.markdown("---")
+        # Butang Download hanya ada dalam ni
+        if os.path.exists(DB_FILE):
+            with open(DB_FILE, "rb") as f:
+                st.download_button(
+                    label="📥 Muat Turun Fail Database (.db)",
+                    data=f,
+                    file_name="sistem_pinjaman_puo.db",
+                    mime="application/octet-stream"
+                )
+        st.info("Gunakan fail .db ini untuk tujuan audit atau backup data.")
             
-            # Bahagian Download
-            if os.path.exists(DB_FILE):
-                with open(DB_FILE, "rb") as f:
-                    st.download_button(
-                        label="📥 Muat Turun Database Utama (.db)",
-                        data=f,
-                        file_name="sistem_pinjaman_puo.db",
-                        mime="application/octet-stream"
-                    )
-            
-            # Bahagian Paparan Database Mentah
-            st.subheader("📁 Data Inventori & Rekod Semasa")
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-        elif user_in or pass_in:
-            st.error("Username atau Password salah!")
+    elif user_in or pass_in:
+        st.error("Username atau Password salah!")
