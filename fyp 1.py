@@ -11,7 +11,7 @@ st.set_page_config(page_title="Sistem Pinjaman Alat Ukur PUO", layout="wide", pa
 DB_FILE = "sistem_pinjaman.db"
 LIMIT_JAM = 3 
 
-# ID & Password untuk Staf (Boleh tukar di sini)
+# Kredential Staf/Admin
 STAFF_USER = "admin"
 STAFF_PASS = "puo123"
 
@@ -61,79 +61,51 @@ def proses_update_db(alat_list, status, peminjam="-", kelas="-", tarikh="-", mas
 init_db()
 df = get_data_from_db()
 
-# 3. SIDEBAR
+# 3. SIDEBAR NAVIGATION
 st.sidebar.header("MENU NAVIGASI")
-menu = st.sidebar.selectbox("Pilih Halaman", ["🏠 UTAMA", "📝 BORANG PINJAMAN", "⏳ STATUS & TIMER"])
+menu = st.sidebar.selectbox("Pilih Halaman", ["🏠 UTAMA", "📝 BORANG PINJAMAN STUDENT", "⏳ STATUS & TIMER", "🔐 AKSES STAF"])
 
-# 4. HALAMAN UTAMA
+# 4. HALAMAN UTAMA (STUDENT VIEW)
 if menu == "🏠 UTAMA":
     st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
+    st.subheader("Selamat Datang ke Sistem Digital Geomatik")
+    
     tersedia = len(df[df['status'] == 'Tersedia'])
     dipinjam = len(df[df['status'] == 'Dipinjam'])
     
-    col1, col2 = st.columns(2)
-    col1.metric("Alat Tersedia", f"{tersedia}")
-    col2.metric("Sedang Dipinjam", f"{dipinjam}")
+    col_stat1, col_stat2 = st.columns(2)
+    col_stat1.metric("Alat Tersedia Untuk Dipinjam", f"{tersedia}")
+    col_stat2.metric("Sedang Digunakan", f"{dipinjam}")
     
-    st.markdown("---")
-    st.subheader("📁 Senarai Inventori & Status Semasa")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.info("Sila ke menu 'Borang Pinjaman' untuk melakukan urusan pinjaman alat.")
 
-# 5. HALAMAN BORANG (KEMASKINI: STUDENT/STAF)
-elif menu == "📝 BORANG PINJAMAN":
-    st.title("📝 Borang Pinjaman Peralatan")
-    
-    # Pilihan Kategori
-    kategori = st.radio("Sila Pilih Kategori Anda:", ["STUDENT", "STAF"], horizontal=True)
-    
+# 5. BORANG PINJAMAN (HANYA UNTUK STUDENT)
+elif menu == "📝 BORANG PINJAMAN STUDENT":
+    st.title("📝 Borang Pinjaman Student")
     senarai_tersedia = df[df['status'] == 'Tersedia']['alat'].tolist()
     
     if senarai_tersedia:
-        with st.form("form_pinjam"):
-            # Bahagian Login jika Staf
-            if kategori == "STAF":
-                st.warning("Akses Staf: Sila masukkan kredential")
-                user_input = st.text_input("Username")
-                pass_input = st.text_input("Password", type="password")
-            
-            # Maklumat Peminjam
+        with st.form("form_pinjam", clear_on_submit=True):
             nama = st.text_input("Nama Penuh").upper()
+            matrik = st.text_input("No. Matrik")
+            kelas = st.text_input("Kelas (e.g. DGU5A)").upper()
+            pilihan_alat = st.multiselect("Pilih Alat-alat yang ingin dipinjam", senarai_tersedia)
             
-            if kategori == "STUDENT":
-                matrik = st.text_input("No. Matrik")
-                identiti = st.text_input("Kelas (e.g. DGU5A)").upper()
-            else:
-                matrik = "STAF"
-                identiti = st.text_input("Jabatan/Unit").upper()
-            
-            pilihan_alat = st.multiselect("Pilih Alat", senarai_tersedia)
-            submit = st.form_submit_button("SAHKAN PINJAMAN")
-            
-            if submit:
-                # Validasi Login Staf
-                login_ok = True
-                if kategori == "STAF":
-                    if user_input != STAFF_USER or pass_input != STAFF_PASS:
-                        st.error("Username atau Password Staf SALAH!")
-                        login_ok = False
-                
-                # Validasi Maklumat Kosong
-                if not nama or not identiti or not pilihan_alat:
-                    st.error("Sila lengkapkan semua maklumat!")
-                    login_ok = False
-                
-                if login_ok:
+            if st.form_submit_button("SAHKAN PINJAMAN"):
+                if nama and matrik and kelas and pilihan_alat:
                     waktu_tamat = datetime.now() + timedelta(hours=LIMIT_JAM)
                     t_str = waktu_tamat.strftime("%Y-%m-%d %H:%M:%S")
                     d_str = date.today().strftime("%d/%m/%Y")
                     
-                    proses_update_db(pilihan_alat, "Dipinjam", nama, identiti, d_str, t_str)
-                    st.success(f"Pinjaman berjaya direkodkan sebagai {kategori}.")
+                    proses_update_db(pilihan_alat, "Dipinjam", nama, kelas, d_str, t_str)
+                    st.success("Pinjaman Berjaya!")
                     st.balloons()
                     time.sleep(1)
                     st.rerun()
+                else:
+                    st.error("Sila isi semua maklumat!")
     else:
-        st.error("Tiada alat tersedia.")
+        st.error("Semua alat sedang dipinjam.")
 
 # 6. STATUS & TIMER
 elif menu == "⏳ STATUS & TIMER":
@@ -142,7 +114,7 @@ elif menu == "⏳ STATUS & TIMER":
     dipinjam_df = df[df['status'] == "Dipinjam"]
     
     if dipinjam_df.empty:
-        st.write("Tiada alat sedang dipinjam.")
+        st.write("Tiada alat yang sedang dipinjam.")
     else:
         for index, row in dipinjam_df.iterrows():
             col1, col2, col3 = st.columns([2, 3, 2])
@@ -162,6 +134,35 @@ elif menu == "⏳ STATUS & TIMER":
             with col3:
                 st.button("PULANG", key=f"btn_{row['alat']}", on_click=proses_update_db, args=([row['alat']], "Tersedia"))
             st.divider()
-    
     time.sleep(5)
     st.rerun()
+
+# 7. AKSES STAF (LOGIN UNTUK TENGOK DATABASE & DOWNLOAD)
+elif menu == "🔐 AKSES STAF":
+    st.title("🔐 Panel Kawalan Staf")
+    
+    # Login Section
+    with st.container():
+        user_in = st.text_input("Username Admin")
+        pass_in = st.text_input("Password Admin", type="password")
+        
+        if user_in == STAFF_USER and pass_in == STAFF_PASS:
+            st.success("Akses Diterima. Selamat Kembali Admin!")
+            st.markdown("---")
+            
+            # Bahagian Download
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, "rb") as f:
+                    st.download_button(
+                        label="📥 Muat Turun Database Utama (.db)",
+                        data=f,
+                        file_name="sistem_pinjaman_puo.db",
+                        mime="application/octet-stream"
+                    )
+            
+            # Bahagian Paparan Database Mentah
+            st.subheader("📁 Data Inventori & Rekod Semasa")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+        elif user_in or pass_in:
+            st.error("Username atau Password salah!")
