@@ -65,7 +65,7 @@ df = get_data_from_db()
 st.sidebar.header("MENU NAVIGASI")
 menu = st.sidebar.selectbox("Pilih Halaman", ["🏠 UTAMA", "📝 BORANG PINJAMAN STUDENT", "⏳ STATUS & TIMER", "🔐 AKSES STAF"])
 
-# 4. HALAMAN UTAMA (TAMBAH DATABASE VIEW)
+# 4. HALAMAN UTAMA (Jadual DB ada kat sini)
 if menu == "🏠 UTAMA":
     st.title("🏗️ Sistem Pinjaman Alat Ukur PUO")
     st.subheader("Selamat Datang ke Sistem Digital Geomatik")
@@ -78,10 +78,8 @@ if menu == "🏠 UTAMA":
     col_stat2.metric("Sedang Digunakan", f"{dipinjam}")
     
     st.markdown("---")
-    # --- JADUAL DATABASE DI HALAMAN UTAMA ---
     st.subheader("📁 Jadual Status Inventori Semasa")
     st.dataframe(df, use_container_width=True, hide_index=True)
-    
     st.info("Sila ke menu 'Borang Pinjaman' untuk melakukan urusan pinjaman alat.")
 
 # 5. BORANG PINJAMAN STUDENT
@@ -142,7 +140,7 @@ elif menu == "⏳ STATUS & TIMER":
     time.sleep(5)
     st.rerun()
 
-# 7. AKSES STAF (LOGIN UNTUK DOWNLOAD SAHAJA)
+# 7. AKSES STAF (Login + DB ada kat sini juga)
 elif menu == "🔐 AKSES STAF":
     st.title("🔐 Panel Kawalan Staf")
     
@@ -150,10 +148,10 @@ elif menu == "🔐 AKSES STAF":
     pass_in = st.text_input("Password Admin", type="password")
     
     if user_in == STAFF_USER and pass_in == STAFF_PASS:
-        st.success("Akses Diterima.")
+        st.success("Akses Diterima. Selamat Datang Admin.")
         st.markdown("---")
         
-        # Butang Download hanya ada dalam ni
+        # Butang Download
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f:
                 st.download_button(
@@ -162,7 +160,11 @@ elif menu == "🔐 AKSES STAF":
                     file_name="sistem_pinjaman_puo.db",
                     mime="application/octet-stream"
                 )
-        st.info("Gunakan fail .db ini untuk tujuan audit atau backup data.")
+        
+        st.markdown("---")
+        # Jadual DB untuk staf semak
+        st.subheader("📁 Rekod Penuh Inventori (Admin View)")
+        st.dataframe(df, use_container_width=True, hide_index=True)
             
     elif user_in or pass_in:
         st.error("Username atau Password salah!")
